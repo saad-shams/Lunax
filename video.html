@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Edits Section</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
+    :root {
+      --bg: #05050a;
+      --fg: #e8e8f0;
+      --muted: #6b6b7a;
+      --accent-cyan: #00f5ff;
+      --accent-magenta: #ff00aa;
+      --accent-yellow: #ffee00;
+      --card: #0f0f18;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg);
+      color: var(--fg);
+      overflow-x: hidden;
+      min-height: 100vh;
+      cursor: none;
+    }
+
+    
+    /* ── FIX: canvas must be fixed so it sits behind everything ── */
+    #c {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 0;           /* behind everything */
+    }
+    .video-logo{
+      z-index: 9;
+     margin-top: 20px; z-index: 9999999;
+    }
+     .glass-card { background: rgba(15, 15, 24, 0.253); border: 1px solid rgba(232, 232, 240, 0.08); backdrop-filter: blur(12px); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .glass-card:hover { border-color: rgba(0, 245, 255, 0.3); transform: translateY(-4px);  }
+
+    .glow-gradient {
+      background: radial-gradient(circle at 50% 50%, #071224, rgba(5,5,10,0.205));
+      position: fixed; top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 1;           /* on top of canvas, under content */
+    }
+
+    /* cursor */
+    .cursor {
+      width: 20px; height: 20px;
+      border: 2px solid var(--accent-cyan); border-radius: 50%;
+      position: fixed; pointer-events: none;
+      z-index: 999999;
+      transition: transform 0.1s ease, border-color 0.2s ease;
+      mix-blend-mode: difference;
+    }
+    .cursor-dot {
+      width: 6px; height: 6px;
+      background: var(--accent-magenta); border-radius: 50%;
+      position: fixed; pointer-events: none; z-index: 999999;
+    }
+
+    /* sparks canvas */
+    #sparkCanvas {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none; z-index: 999998;
+    }
+
+    /* section — z-index: 2 so it sits above canvas + glow */
+    .video-section-wrap {
+      position: relative;
+      z-index: 2;
+      max-width: 1400px; margin: 0 auto;
+      padding: 5rem 1.5rem 6rem;
+    }
+
+    h1, h2 { letter-spacing: -0.04em; line-height: 0.95; }
+
+    /* grid */
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 1200px) { .video-grid { grid-template-columns: repeat(4,1fr); } }
+    @media (max-width: 900px)  { .video-grid { grid-template-columns: repeat(3,1fr); } }
+    @media (max-width: 600px)  { .video-grid { grid-template-columns: repeat(2,1fr); } }
+
+    /* card */
+    .vid-card {
+      position: relative;
+      border-radius: 1rem;
+      overflow: hidden;
+      cursor: pointer;
+      background: var(--card);
+      border: 1px solid rgba(232,232,240,0.07);
+      aspect-ratio: 9/16;
+      transition:
+        transform 0.35s cubic-bezier(0.16,1,0.3,1),
+        border-color 0.3s ease,
+        box-shadow 0.35s ease;
+    }
+    .vid-card:hover {
+      transform: translateY(-6px) scale(1.02);
+      border-color: rgba(0,245,255,0.4);
+      box-shadow: 0 20px 60px rgba(0,245,255,0.12), 0 0 0 1px rgba(0,245,255,0.08);
+    }
+    .vid-card::after {
+      content: '';
+      position: absolute; inset: 0; border-radius: 1rem;
+      box-shadow: inset 0 0 0 1px rgba(0,245,255,0);
+      transition: box-shadow 0.4s ease;
+      pointer-events: none;
+    }
+    .vid-card:hover::after {
+      box-shadow: inset 0 0 0 1px rgba(0,245,255,0.2);
+    }
+
+    .vid-thumb {
+      width: 100%; height: 100%;
+      object-fit: cover; display: block;
+      transition: transform 0.6s ease, filter 0.4s ease;
+    }
+    .vid-card:hover .vid-thumb {
+      transform: scale(1.07);
+      filter: brightness(0.42);
+    }
+
+    .vid-grad {
+      position: absolute; inset: 0;
+      background: linear-gradient(to top,
+        rgba(5,5,10,0.96) 0%,
+        rgba(5,5,10,0.3)  45%,
+        rgba(5,5,10,0.08) 100%);
+    }
+
+    .vid-play {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%) scale(0.6);
+      width: 54px; height: 54px; border-radius: 50%;
+      background: rgba(0,245,255,0.12);
+      border: 1.5px solid rgba(0,245,255,0.55);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16,1,0.3,1);
+      backdrop-filter: blur(8px);
+    }
+    .vid-play svg { color: var(--accent-cyan); margin-left: 3px; }
+    .vid-card:hover .vid-play {
+      opacity: 1;
+      transform: translate(-50%,-50%) scale(1);
+    }
+
+    .vid-tag {
+      position: absolute; top: 0.65rem; left: 0.65rem;
+      font-size: 0.52rem; letter-spacing: 2.5px; text-transform: uppercase;
+      font-weight: 700; padding: 3px 8px; border-radius: 100px;
+      background: rgba(5,5,10,0.75); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,0,170,0.4); color: var(--accent-magenta);
+    }
+
+    .vid-views {
+      position: absolute; top: 0.65rem; right: 0.65rem;
+      font-size: 0.52rem; letter-spacing: 1px; font-family: monospace;
+      color: rgba(255,238,0,0.75);
+      background: rgba(5,5,10,0.7); backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,238,0,0.2);
+      padding: 3px 8px; border-radius: 100px;
+    }
+
+    .vid-info {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 0.8rem;
+    }
+    .vid-title {
+      font-size: clamp(0.68rem, 1.1vw, 0.82rem);
+      font-weight: 700; color: var(--fg);
+      letter-spacing: -0.02em; margin-bottom: 0.22rem; line-height: 1.2;
+    }
+    .vid-desc {
+      font-size: clamp(0.52rem, 0.8vw, 0.65rem);
+      color: rgba(107,107,122,0.9); line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .vid-num {
+      position: absolute; bottom: 0.65rem; right: 0.65rem;
+      font-family: monospace; font-size: 0.55rem;
+      letter-spacing: 1px; color: rgba(0,245,255,0.2);
+    }
+
+    /* MODAL */
+    .vm-overlay {
+      position: fixed; inset: 0; z-index: 200000;
+      background: rgba(5,5,10,0.9);
+      backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 1rem;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.28s ease;
+    }
+    .vm-overlay.is-open { opacity: 1; pointer-events: all; }
+
+    .vm-modal {
+      position: relative;
+      width: 100%; max-width: 880px;
+      background: rgba(10,10,20,0.92);
+      border: 1px solid rgba(0,245,255,0.14);
+      border-radius: 1.5rem;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04) inset,
+        0 40px 100px rgba(0,0,0,0.75),
+        0 0 90px rgba(0,245,255,0.06);
+      transform: translateY(28px) scale(0.95);
+      transition: transform 0.34s cubic-bezier(0.16,1,0.3,1);
+    }
+    .vm-overlay.is-open .vm-modal { transform: translateY(0) scale(1); }
+
+    .vm-modal::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+      border-radius: 1.5rem 1.5rem 0 0;
+      background: linear-gradient(90deg, #00f5ff, #ff00aa, #ffee00, #00f5ff);
+      background-size: 200% 100%;
+      animation: vmgrad 3s linear infinite;
+    }
+    @keyframes vmgrad { 0%{background-position:0%} 100%{background-position:200%} }
+
+    .vm-video-wrap {
+      position: relative; width: 100%; padding-top: 56.25%;
+      background: #000;
+    }
+    .vm-video-wrap iframe {
+      position: absolute; inset: 0; width: 100%; height: 100%; border: none;
+    }
+    .vm-scanlines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
+      background: repeating-linear-gradient(0deg,
+        transparent, transparent 2px,
+        rgba(0,245,255,0.015) 2px, rgba(0,245,255,0.015) 4px);
+    }
+
+    .vm-info {
+      padding: 1.1rem 1.4rem 1.3rem;
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 1rem;
+    }
+    .vm-info-left { flex: 1; min-width: 0; }
+    .vm-modal-tag {
+      display: inline-block;
+      font-size: 0.58rem; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--accent-magenta); font-weight: 700; margin-bottom: 0.35rem;
+    }
+    .vm-modal-title {
+      font-size: clamp(1.05rem, 3vw, 1.45rem);
+      font-weight: 800; letter-spacing: -0.03em;
+      color: var(--fg); line-height: 1.15; margin-bottom: 0.35rem;
+    }
+    .vm-modal-desc {
+      font-size: 0.8rem; color: var(--muted); line-height: 1.65;
+    }
+
+    .vm-close {
+      position: absolute; top: 0.9rem; right: 0.9rem;
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid rgba(232,232,240,0.12);
+      background: rgba(232,232,240,0.06); color: var(--muted);
+      font-size: 0.95rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.22s ease; z-index: 10;
+    }
+    .vm-close:hover {
+      background: rgba(255,0,170,0.15);
+      border-color: rgba(255,0,170,0.4);
+      color: var(--accent-magenta);
+      transform: rotate(90deg);
+    }
+
+    .vm-nav { display: flex; gap: 0.45rem; align-items: center; flex-shrink: 0; }
+    .vm-nav-btn {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid rgba(232,232,240,0.12);
+      background: rgba(232,232,240,0.05); color: var(--muted);
+      font-size: 1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s ease;
+    }
+    .vm-nav-btn:hover {
+      border-color: rgba(0,245,255,0.4);
+      background: rgba(0,245,255,0.08);
+      color: var(--accent-cyan);
+    }
+    .vm-counter {
+      font-family: monospace; font-size: 0.62rem;
+      letter-spacing: 2px; color: #2e2e40;
+      padding: 0 0.2rem; white-space: nowrap;
+    }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+  </style>
+</head>
+<body>
+ 
+  <!-- z-index: 0 — particles live here -->
+  <canvas id="c"></canvas>
+
+  <!-- z-index: 1 — dark blue glow on top of canvas -->
+  <div class="glow-gradient"></div>
+
+  <!-- custom cursor -->
+  <div class="cursor" id="cursor"></div>
+  <div class="cursor-dot" id="cursorDot"></div>
+  <canvas id="sparkCanvas"></canvas>
+  <div class="video-logo" style="display: flex; justify-content: center; align-items: center; width: 100vw; height: auto; "> 
+ <a href="index.html">
+      <img src="assets/m-logo.png" alt="" style="width: 90px; height: auto; position: relative;  z-index: 3;">
+      </a>
+  </div>
+
+
+  <!-- NAV -->
+    <nav class="fixed top-10 left-1/2 transform -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-xl">
+        <div class="glass-card px-6 py-2.5 rounded-full flex justify-between items-center text-sm font-medium text-[#6b6b7a]">
+            <a href="index.html" class="back-link">← Back</a>
+            <div class="flex gap-6">
+                <a href="#platforms" class="hover:text-[#e8e8f0] transition-colors">Platforms</a>
+                <a href="#screenshots" class="hover:text-[#e8e8f0] transition-colors">Work</a>
+            </div>
+            <button onclick="window.bmOpen ? bmOpen() : null" class="text-[#05050a] bg-[#00f5ff] px-3 py-1 rounded-full hover:bg-[#ff00aa] hover:text-[#e8e8f0] transition-all font-bold whitespace-nowrap cursor-pointer border-0 text-xs">Hire Me</button>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <div class="hero-wrap">
+        <canvas id="hero-canvas"></canvas>
+
+        <!-- Floating badges -->
+        <div class="absolute top-1/4 left-8 md:left-20 z-10 hidden md:block">
+            <div class="glass-card rounded-2xl p-3 text-xs font-mono text-[#00f5ff] opacity-70">
+                PLATFORMS: 9<br>MARKETS: GLOBAL<br>STATUS: LIVE
+            </div>
+        </div>
+        <div class="absolute top-1/3 right-8 md:right-20 z-10 hidden md:block">
+            <div class="glass-card rounded-2xl p-3 text-xs font-mono text-[#ff00aa] opacity-70">
+                CONV. RATE: ↑40%<br>LIGHTHOUSE: 99/100<br>HEADLESS: YES
+            </div>
+        </div>
+
+        <div class="hero-inner">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-[#00f5ff]/30 bg-[#00f5ff]/5 text-xs text-[#00f5ff] mb-8 uppercase tracking-widest font-semibold">
+                <span class="w-2 h-2 rounded-full bg-[#ff00aa] animate-pulse"></span>
+                9 Platforms · Global Reach
+            </div>
+            <h1 class="text-5xl md:text-8xl lg:text-9xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-b from-[#e8e8f0] to-[#6b6b7a]">
+                E-COMMERCE<br>
+                <span style="background: linear-gradient(135deg,#00f5ff,#ff00aa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;">MASTERY.</span>
+            </h1>
+            <p class="text-base md:text-xl text-[#6b6b7a] max-w-xl mx-auto leading-relaxed mb-10">
+                From Shopify storefront to TikTok Shop — full-stack commerce builds across every major marketplace.
+            </p>
+            <div class="flex flex-wrap justify-center gap-3">
+                <a href="#platforms" class="px-6 py-3 bg-[#e8e8f0] text-[#05050a] font-bold rounded-full hover:bg-[#00f5ff] transition-colors text-sm">Explore Platforms</a>
+                <a href="#screenshots" class="px-6 py-3 border border-[#e8e8f0]/20 hover:bg-[#e8e8f0]/5 rounded-full font-medium transition-colors text-[#e8e8f0] text-sm">View Work</a>
+            </div>
+        </div>
+
+
+
+  <!-- z-index: 2 — actual page content -->
+  <section class="video-section-wrap" id="edits">
+   
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 md:mb-12 border-b border-[#e8e8f0]/10 pb-6 md:pb-8 gap-4">
+      <h2 class="text-3xl md:text-5xl font-bold">Video<br>Edits</h2>
+     
+      <p class="text-[#6b6b7a] max-w-sm md:text-right text-sm md:text-base">Motion pieces &amp; edits — click any card to watch.</p>
+    </div>
+    <div class="video-grid" id="videoGrid"></div>
+  </section>
+
+  <!-- MODAL -->
+  <div class="vm-overlay" id="vmOverlay" role="dialog" aria-modal="true">
+    <div class="vm-modal">
+      <button class="vm-close" id="vmClose">✕</button>
+      <div class="vm-video-wrap">
+        <div class="vm-scanlines"></div>
+        <iframe id="vmFrame" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+      </div>
+      <div class="vm-info">
+        <div class="vm-info-left">
+          <span class="vm-modal-tag" id="vmTag"></span>
+          <div class="vm-modal-title" id="vmTitle"></div>
+          <div class="vm-modal-desc" id="vmDesc"></div>
+        </div>
+        <div class="vm-nav">
+          <button class="vm-nav-btn" id="vmPrev">&#8249;</button>
+          <span class="vm-counter" id="vmCounter">1 / 10</span>
+          <button class="vm-nav-btn" id="vmNext">&#8250;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
+
+   <!-- FOOTER -->
+    <footer class="pop-up-section relative z-10 w-full pb-12 pt-12">
+        <div class="w-[90%] mx-auto">
+            <div class="glass-card rounded-[2rem] p-8 md:p-12">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center gap-2 text-xl font-bold text-[#e8e8f0]">
+                            <!-- <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-[#00f5ff] to-[#ff00aa] flex items-center justify-center text-black text-xs font-bold">W</div>
+                            <span>Winter.</span> -->
+                            <img src="assets/m-logo.png" alt="" style="width: 70px;" height="auto">
+                        </div>
+                        <p class="text-sm text-[#6b6b7a]">Building digital experiences for the next generation of commerce and creative web.</p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-[#e8e8f0] mb-4">Navigation</h4>
+                        <ul class="space-y-2 text-sm text-[#6b6b7a]">
+                            <li><a href="#" class="hover:text-[#00f5ff] transition-colors">Home</a></li>
+                            <li><a href="#work" class="hover:text-[#00f5ff] transition-colors">Work</a></li>
+                            <li><a href="#reviews" class="hover:text-[#00f5ff] transition-colors">Testimonials</a></li>
+                            <li><a href="#contact" class="hover:text-[#00f5ff] transition-colors">Contact</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-[#e8e8f0] mb-4">Services</h4>
+                        <ul class="space-y-2 text-sm text-[#6b6b7a]">
+                            <li><a href="#" class="hover:text-[#00f5ff] transition-colors">Shopify Dev</a></li>
+                            <li><a href="#" class="hover:text-[#00f5ff] transition-colors">UI/UX Design</a></li>
+                            <li><a href="#" class="hover:text-[#00f5ff] transition-colors">Consulting</a></li>
+                            <li><a href="#" class="hover:text-[#00f5ff] transition-colors">Migration</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold text-[#e8e8f0] mb-4">Contact</h4>
+                        <div class="space-y-2 text-sm text-[#6b6b7a]">
+                            <p>123 Digital Avenue<br>San Francisco, CA 94107</p>
+                            <p><a href="mailto:hello@winter.com" class="hover:text-[#00f5ff] transition-colors">hello@winter.com</a></p>
+                            <p><a href="tel:+1234567890" class="hover:text-[#00f5ff] transition-colors">+1 (234) 567-890</a></p>
+                        </div>
+                    </div>
+                </div>
+                <div class="border-t border-[#e8e8f0]/10 pt-6 flex flex-col md:flex-row justify-between items-center text-xs text-[#6b6b7a]">
+                    <p>&copy; 2026 Winter Edition Portfolio. All rights reserved.</p>
+                    <div class="flex gap-4 mt-4 md:mt-0">
+                        <a href="#" class="hover:text-[#00f5ff]">Privacy Policy</a>
+                        <a href="#" class="hover:text-[#00f5ff]">Terms of Service</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+  <script>
+    // ── PARTICLES (Three.js) ──────────────────────────────────────
+    const scene    = new THREE.Scene();
+    const camera   = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, alpha: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    camera.position.z = 3.5;
+
+    const particlesCount = 300;
+    const posArray = new Float32Array(particlesCount * 3);
+    for (let i = 0; i < particlesCount * 3; i++) posArray[i] = (Math.random() - 0.5) * 5;
+    const particlesGeo = new THREE.BufferGeometry();
+    particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const particlesMat = new THREE.PointsMaterial({ size: 0.015, color: 0xffee00, transparent: true, opacity: 0.6 });
+    const particles = new THREE.Points(particlesGeo, particlesMat);
+    scene.add(particles);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+
+    function animateParticles() {
+      requestAnimationFrame(animateParticles);
+      particles.rotation.y += 0.0005;
+      particles.rotation.x += 0.0002;
+      renderer.render(scene, camera);
+    }
+    animateParticles();
+
+    // ── VIDEO CARDS ───────────────────────────────────────────────
+    (function () {
+      const VIDEOS = [
+        { title:'Cinematic Brand Film',   desc:'Full edit for a luxury fashion brand — colour graded in DaVinci Resolve.',  tag:'Brand',      views:'124K', youtubeId:'tPiRTLcJEh0', thumb:'assets/videos/family-guy.png' },
+        { title:'Product Launch Reel',    desc:'Fast-cut product reveal with motion graphics and 3D overlays.',             tag:'Commercial', views:'89K',  youtubeId:'dQw4w9WgXcQ', thumb:'assets/videos/anderson.png' },
+        { title:'Music Video Edit',       desc:'Sync-heavy cut timed to every beat drop — colour leaks & glitch FX.',      tag:'Music',      views:'312K', youtubeId:'dQw4w9WgXcQ', thumb:'assets/videos/rental-hero.png' },
+        { title:'Event Highlight Reel',   desc:'Same-day turnaround edit for a 3-day brand activation event.',             tag:'Event',      views:'47K',  youtubeId:'dQw4w9WgXcQ', thumb:'assets/videos/arcane.png' },
+        { title:'Documentary Short',      desc:'Mini-doc following a streetwear founder for 48 hours.',                    tag:'Doc',        views:'201K', youtubeId:'dQw4w9WgXcQ', thumb:'assets/videos/death-note.png' },
+        { title:'Social Media Pack',      desc:'15 short-form cuts optimised for Reels, TikTok & Shorts.',                 tag:'Social',     views:'560K', youtubeId:'dQw4w9WgXcQ', thumb:'assets/videos/hit-monkey.png' },
+        { title:'Aerial Showcase',        desc:'Drone footage of a coastal resort — edited for client website.',           tag:'Aerial',     views:'78K',  youtubeId:'dQw4w9WgXcQ', thumb:'assets/videos/deep-water.png' },
+        { title:'Shopify Store Promo',    desc:'Built the store, shot and edited the launch promo in-house.',              tag:'Hybrid',     views:'93K',  youtubeId:'dQw4w9WgXcQ', thumb:'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=500&q=80' },
+        { title:'Athlete Promo Reel',     desc:"High-energy cut for a pro athlete's sponsorship package.",                 tag:'Sports',     views:'445K', youtubeId:'dQw4w9WgXcQ', thumb:'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=500&q=80' },
+        { title:'Showreel 2026',          desc:'Best-of compilation — all genres, all formats, one tight cut.',            tag:'Showreel',   views:'1.2M', youtubeId:'dQw4w9WgXcQ', thumb:'https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=500&q=80' },
+      ];
+
+      const grid = document.getElementById('videoGrid');
+      VIDEOS.forEach((v, i) => {
+        const card = document.createElement('div');
+        card.className = 'vid-card';
+        card.setAttribute('tabindex','0');
+        card.innerHTML = `
+          <img class="vid-thumb" src="${v.thumb}" alt="${v.title}" loading="lazy">
+          <div class="vid-grad"></div>
+          <span class="vid-tag">${v.tag}</span>
+          <span class="vid-views">&#9654; ${v.views}</span>
+          <div class="vid-play">
+            <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+          <div class="vid-info">
+            <div class="vid-title">${v.title}</div>
+            <div class="vid-desc">${v.desc}</div>
+          </div>
+          <span class="vid-num">${String(i+1).padStart(2,'0')}</span>`;
+        card.addEventListener('click', () => openModal(i));
+        card.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') openModal(i); });
+        grid.appendChild(card);
+      });
+
+      const overlay = document.getElementById('vmOverlay');
+      const frame   = document.getElementById('vmFrame');
+      let cur = 0;
+
+      function openModal(i) {
+        cur = i; loadVideo(i);
+        overlay.classList.add('is-open');
+        document.body.style.overflow = 'hidden';
+      }
+      function closeModal() {
+        overlay.classList.remove('is-open');
+        document.body.style.overflow = '';
+        frame.src = '';
+      }
+      function loadVideo(i) {
+        const v = VIDEOS[i];
+        frame.src = `https://www.youtube.com/embed/${v.youtubeId}?autoplay=1&rel=0&modestbranding=1`;
+        document.getElementById('vmTag').textContent     = v.tag;
+        document.getElementById('vmTitle').textContent   = v.title;
+        document.getElementById('vmDesc').textContent    = v.desc;
+        document.getElementById('vmCounter').textContent = `${i+1} / ${VIDEOS.length}`;
+      }
+      function nav(d) {
+        frame.src = '';
+        cur = (cur + d + VIDEOS.length) % VIDEOS.length;
+        setTimeout(() => loadVideo(cur), 100);
+      }
+
+      document.getElementById('vmClose').addEventListener('click', closeModal);
+      document.getElementById('vmPrev').addEventListener('click', () => nav(-1));
+      document.getElementById('vmNext').addEventListener('click', () => nav(1));
+      overlay.addEventListener('click', e => { if (e.target === overlay) closeModal(); });
+      document.addEventListener('keydown', e => {
+        if (!overlay.classList.contains('is-open')) return;
+        if (e.key==='Escape')     closeModal();
+        if (e.key==='ArrowRight') nav(1);
+        if (e.key==='ArrowLeft')  nav(-1);
+      });
+    })();
+
+    // ── CURSOR ────────────────────────────────────────────────────
+    const cursorEl  = document.getElementById('cursor');
+    const cursorDot = document.getElementById('cursorDot');
+    let cursorX=0, cursorY=0, dotX=0, dotY=0;
+    document.addEventListener('mousemove', e => { cursorX=e.clientX; cursorY=e.clientY; });
+    function animateCursor() {
+      dotX += (cursorX-dotX)*0.15; dotY += (cursorY-dotY)*0.15;
+      cursorEl.style.left  = (cursorX-10)+'px'; cursorEl.style.top  = (cursorY-10)+'px';
+      cursorDot.style.left = (dotX-3)+'px';     cursorDot.style.top = (dotY-3)+'px';
+      requestAnimationFrame(animateCursor);
+    }
+    animateCursor();
+
+    // ── SPARKS ────────────────────────────────────────────────────
+    const sparkCanvas = document.getElementById('sparkCanvas');
+    const sCtx = sparkCanvas.getContext('2d');
+    let sparks = [];
+    const colors = ['#00f5ff','#ff00aa','#ffee00'];
+    function resizeSpark() { sparkCanvas.width=innerWidth; sparkCanvas.height=innerHeight; }
+    resizeSpark(); window.addEventListener('resize', resizeSpark);
+    class Spark {
+      constructor(x,y) {
+        this.x=x; this.y=y;
+        const a=Math.random()*Math.PI*2, sp=Math.random()*8+4;
+        this.vx=Math.cos(a)*sp; this.vy=Math.sin(a)*sp;
+        this.life=1; this.decay=Math.random()*0.03+0.02;
+        this.color=colors[Math.floor(Math.random()*colors.length)];
+        this.size=Math.random()*4+2;
+      }
+      update() { this.x+=this.vx; this.y+=this.vy; this.vy+=0.15; this.vx*=0.98; this.vy*=0.98; this.life-=this.decay; }
+      draw() {
+        if(this.life<=0) return;
+        sCtx.save(); sCtx.globalAlpha=this.life; sCtx.fillStyle=this.color;
+        sCtx.shadowBlur=15; sCtx.shadowColor=this.color;
+        sCtx.beginPath(); sCtx.arc(this.x,this.y,Math.max(0.1,this.size*this.life),0,Math.PI*2);
+        sCtx.fill(); sCtx.restore();
+      }
+    }
+    function animateSparks() {
+      sCtx.clearRect(0,0,sparkCanvas.width,sparkCanvas.height);
+      sparks = sparks.filter(s=>s.life>0);
+      sparks.forEach(s => { s.update(); s.draw(); });
+      requestAnimationFrame(animateSparks);
+    }
+    animateSparks();
+    document.addEventListener('click', e => { for(let i=0;i<40;i++) sparks.push(new Spark(e.clientX,e.clientY)); });
+
+
+
+
+
+
+
+
+    // ===== THREE.JS HERO PARTICLE FIELD =====
+    (function(){
+        const canvas = document.getElementById('hero-canvas');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // Grid of nodes
+        const group = new THREE.Group();
+        scene.add(group);
+
+        // Platform nodes — 9 glowing spheres orbiting
+        const platforms = [
+            { color: 0x96bf44, r: 2.8, speed: 0.004, offset: 0 },      // Shopify
+            { color: 0xff9900, r: 3.5, speed: 0.003, offset: 0.7 },     // Amazon
+            { color: 0x0e76bc, r: 4.1, speed: 0.0025, offset: 1.4 },    // eBay
+            { color: 0x0071ce, r: 3.0, speed: 0.005, offset: 2.1 },     // Walmart
+            { color: 0xf1641e, r: 4.5, speed: 0.002, offset: 2.8 },     // Etsy
+            { color: 0x00f5ff, r: 3.8, speed: 0.0035, offset: 3.5 },    // TikTok
+            { color: 0xff00aa, r: 2.5, speed: 0.006, offset: 4.2 },     // ManoMano
+            { color: 0xffee00, r: 5.0, speed: 0.0015, offset: 4.9 },    // Cdiscount
+            { color: 0x009639, r: 4.3, speed: 0.0028, offset: 5.6 },    // Bol.com
+        ];
+
+        const nodes = platforms.map(p => {
+            const geo = new THREE.SphereGeometry(0.12, 12, 12);
+            const mat = new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.9 });
+            const mesh = new THREE.Mesh(geo, mat);
+            // Glow halo
+            const hGeo = new THREE.SphereGeometry(0.22, 12, 12);
+            const hMat = new THREE.MeshBasicMaterial({ color: p.color, transparent: true, opacity: 0.12, wireframe: false });
+            const halo = new THREE.Mesh(hGeo, hMat);
+            mesh.add(halo);
+            group.add(mesh);
+            return { mesh, ...p, angle: p.offset };
+        });
+
+        // Central icosahedron
+        const icoGeo = new THREE.IcosahedronGeometry(1, 2);
+        const icoWire = new THREE.WireframeGeometry(icoGeo);
+        const icoMat = new THREE.LineBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.25 });
+        const ico = new THREE.LineSegments(icoWire, icoMat);
+        group.add(ico);
+
+        // Connection lines between nodes
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00f5ff, transparent: true, opacity: 0.06, vertexColors: false });
+
+        // Particles
+        const partGeo = new THREE.BufferGeometry();
+        const partCount = 600;
+        const partPos = new Float32Array(partCount * 3);
+        for(let i=0;i<partCount*3;i++) partPos[i]=(Math.random()-0.5)*20;
+        partGeo.setAttribute('position', new THREE.BufferAttribute(partPos,3));
+        const partMat = new THREE.PointsMaterial({ size: 0.025, color: 0xffffff, transparent: true, opacity: 0.2 });
+        const particles = new THREE.Points(partGeo, partMat);
+        scene.add(particles);
+
+        camera.position.z = 8;
+        let lineSegs = null;
+
+        function updateLines() {
+            if (lineSegs) { group.remove(lineSegs); lineSegs.geometry.dispose(); }
+            const positions = [];
+            for(let i=0;i<nodes.length;i++){
+                for(let j=i+1;j<nodes.length;j++){
+                    const a=nodes[i].mesh.position, b=nodes[j].mesh.position;
+                    if(a.distanceTo(b)<5) {
+                        positions.push(a.x,a.y,a.z,b.x,b.y,b.z);
+                    }
+                }
+            }
+            const lGeo = new THREE.BufferGeometry();
+            lGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions),3));
+            lineSegs = new THREE.LineSegments(lGeo, lineMat);
+            group.add(lineSegs);
+        }
+
+        window.addEventListener('resize', ()=>{
+            camera.aspect=window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth,window.innerHeight);
+        });
+
+        let t = 0;
+        function animate(){
+            requestAnimationFrame(animate);
+            t += 0.008;
+            ico.rotation.y += 0.003; ico.rotation.x += 0.001;
+            nodes.forEach(n=>{
+                n.angle += n.speed;
+                n.mesh.position.set(
+                    Math.cos(n.angle)*n.r,
+                    Math.sin(n.angle*0.7)*1.5,
+                    Math.sin(n.angle)*n.r*0.4
+                );
+            });
+            updateLines();
+            particles.rotation.y += 0.0003;
+            group.rotation.y += 0.001;
+            renderer.render(scene, camera);
+        }
+        animate();
+    })();
+  </script>
+</body>
+</html>

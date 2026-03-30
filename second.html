@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Signal | A Scrollytelling Experience</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #05050a;
+      --fg: #e8e8f0;
+      --muted: #6b6b7a;
+      --accent-cyan: #00f5ff;
+      --accent-magenta: #ff00aa;
+      --accent-yellow: #ffee00;
+      --card: #0f0f18;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+   
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      overflow-x: hidden;
+      cursor: none;
+    }
+
+    .font-display { font-family: 'Syne', sans-serif; }
+
+    /* Custom Cursor */
+    .cursor {
+      width: 20px; height: 20px;
+      border: 2px solid var(--accent-cyan);
+      border-radius: 50%;
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+      transition: transform 0.1s ease, border-color 0.2s ease, background 0.2s ease;
+      mix-blend-mode: difference;
+    }
+
+    .cursor-dot {
+      width: 6px; height: 6px;
+      background: var(--accent-magenta);
+      border-radius: 50%;
+      position: fixed;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Spark Canvas */
+    #sparkCanvas {
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* Progress Bar */
+    .progress-bar {
+      position: fixed;
+      top: 0; left: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+      width: 0%;
+      z-index: 9999;
+      transition: width 0.1s linear;
+    }
+
+    /* Scrollytelling Layout */
+    .scrolly-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* Mobile Stack */
+    @media (max-width: 768px) {
+      .scrolly-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Text Column (Left) */
+    .text-col {
+      padding: 4rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    @media (max-width: 768px) {
+      .text-col {
+        padding: 2rem;
+        order: 2;
+      }
+    }
+
+    /* Visual Column (Right - Sticky) */
+    .visual-col {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: var(--bg);
+    }
+
+    @media (max-width: 768px) {
+      .visual-col {
+        position: relative;
+        height: 60vh;
+        order: 1;
+        top: 0;
+      }
+    }
+
+    /* Story Steps */
+    .story-step {
+      min-height: 90vh; /* Create scroll space */
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+      border-left: 2px solid transparent;
+      padding-left: 2rem;
+      margin-left: -2rem; /* visual alignment */
+    }
+
+    .story-step.active {
+      opacity: 1;
+      transform: translateY(0);
+      border-left-color: var(--accent-cyan);
+    }
+
+    .step-tag {
+      display: inline-block;
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--accent-magenta);
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+
+    .step-title {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, var(--fg) 0%, var(--accent-cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .step-text {
+      font-size: 1.1rem;
+      line-height: 1.8;
+      color: var(--muted);
+      max-width: 450px;
+      margin-bottom: 1.5rem;
+    }
+
+    /* Dynamic Visual Scenes */
+    .scene-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 1s ease;
+    }
+
+    /* Abstract Visual Elements */
+    .visual-el {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(60px);
+      transition: all 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    .el-1 {
+      width: 300px; height: 300px;
+      background: var(--accent-cyan);
+      opacity: 0;
+      transform: scale(0.5);
+    }
+   
+    .el-2 {
+      width: 400px; height: 400px;
+      background: var(--accent-magenta);
+      opacity: 0;
+      transform: scale(0.5) translateX(100px);
+    }
+
+    .el-3 {
+      width: 200px; height: 200px;
+      background: var(--accent-yellow);
+      opacity: 0;
+      transform: scale(0.5) translateY(-100px);
+    }
+
+    /* Scene States */
+    .scene-intro .el-1 { opacity: 0.1; transform: scale(1); }
+   
+    .scene-discovery .el-1 { opacity: 0.4; transform: scale(1.2); }
+    .scene-discovery .el-2 { opacity: 0.2; transform: scale(1); }
+   
+    .scene-conflict .el-1 { opacity: 0.6; transform: scale(1) translateX(-50px); }
+    .scene-conflict .el-2 { opacity: 0.6; transform: scale(1.1) translateX(50px); }
+    .scene-conflict .el-3 { opacity: 0.4; transform: scale(1); }
+   
+    .scene-transcend .el-1 { opacity: 0.8; transform: scale(1.5); }
+    .scene-transcend .el-2 { opacity: 0.8; transform: scale(1.5); }
+    .scene-transcend .el-3 { opacity: 0.8; transform: scale(1.5); }
+    .scene-transcend { filter: hue-rotate(90deg); }
+
+    /* Glitch Overlay Effect on Visual */
+    .glitch-overlay {
+      position: absolute;
+      inset: 0;
+      background: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)" /%3E%3C/svg%3E');
+      opacity: 0.05;
+      mix-blend-mode: overlay;
+      pointer-events: none;
+    }
+
+    /* Graphic Central Element */
+    .central-graphic {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
+      transition: all 1s ease;
+    }
+
+    .central-graphic::before {
+      content: '';
+      width: 100px;
+      height: 100px;
+      border: 1px solid rgba(0, 245, 255, 0.3);
+      border-radius: 50%;
+      position: absolute;
+      animation: pulse 3s infinite;
+    }
+
+    .central-graphic::after {
+      content: '';
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+
+    /* Specific Scene tweaks */
+    .scene-intro .central-graphic { transform: scale(0.8); border-color: transparent; }
+    .scene-discovery .central-graphic { border-color: var(--accent-cyan); box-shadow: 0 0 50px rgba(0, 245, 255, 0.2); }
+    .scene-conflict .central-graphic { border-color: var(--accent-magenta); box-shadow: 0 0 80px rgba(255, 0, 170, 0.3); transform: rotate(45deg); }
+    .scene-transcend .central-graphic { border-color: var(--accent-yellow); box-shadow: 0 0 120px rgba(255, 238, 0, 0.5); transform: scale(1.5); }
+
+    /* Footer */
+    .footer-section {
+      padding: 6rem 4rem;
+      text-align: center;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+      z-index: 2;
+    }
+
+    .btn-restart {
+      padding: 1rem 2.5rem;
+      background: transparent;
+      border: 1px solid var(--accent-cyan);
+      color: var(--accent-cyan);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 2rem;
+    }
+
+    .btn-restart:hover {
+      background: var(--accent-cyan);
+      color: var(--bg);
+      box-shadow: 0 0 30px rgba(0, 245, 255, 0.4);
+    }
+
+    /* Scroll Indicator */
+    .scroll-indicator {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--muted);
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      opacity: 1;
+      transition: opacity 0.3s ease;
+      z-index: 10;
+    }
+   
+    .scroll-indicator.hidden { opacity: 0; pointer-events: none; }
+
+    .scroll-arrow {
+      margin-top: 0.5rem;
+      animation: bounce 2s infinite;
+    }
+
+    @keyframes bounce {
+      0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(10px); }
+      60% { transform: translateY(5px); }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Cursor & Sparks -->
+  <div class="cursor" id="cursor"></div>
+  <div class="cursor-dot" id="cursorDot"></div>
+  <canvas id="sparkCanvas"></canvas>
+ 
+  <!-- Progress Bar -->
+  <div class="progress-bar" id="progressBar"></div>
+
+  <!-- Intro Section -->
+  <header style="height: 100vh; display: flex; align-items: center; justify-content: center; position: relative; z-index: 2; text-align: center; padding: 2rem;">
+    <div>
+      <span class="step-tag">Chapter One</span>
+      <h1 class="step-title font-display" style="font-size: clamp(3rem, 8vw, 6rem);">THE SIGNAL</h1>
+      <p class="step-text" style="max-width: 600px; margin: 0 auto;">A story from the edge of known space.</p>
+    </div>
+  </header>
+
+  <!-- Scrollytelling Container -->
+  <div class="scrolly-container">
+   
+    <!-- Left: Text Steps -->
+    <div class="text-col">
+      <div id="step-intro" class="story-step" data-scene="intro">
+        <span class="step-tag">01 // The Void</span>
+        <h2 class="step-title font-display">Silence</h2>
+        <p class="step-text">
+          Deep in sector 7G, the silence isn't empty. It's heavy. It presses against the hull of your station like a physical weight.
+          You've been monitoring the frequencies for three cycles.
+        </p>
+      </div>
+
+      <div id="step-discovery" class="story-step" data-scene="discovery">
+        <span class="step-tag">02 // The Anomaly</span>
+        <h2 class="step-title font-display">Detection</h2>
+        <p class="step-text">
+          A spike on the spectral analyzer. It's not background radiation. It's structured. Pulsing.
+          A rhythm that feels too deliberate to be natural. It’s coming from the coordinates of the vanished colony.
+        </p>
+      </div>
+
+      <div id="step-conflict" class="story-step" data-scene="conflict">
+        <span class="step-tag">03 // The Choice</span>
+        <h2 class="step-title font-display">Decryption</h2>
+        <p class="step-text">
+          The AI warns of a viral payload embedded in the transmission. Opening it could compromise the entire station.
+          But the signal contains images. Faces. The missing colonists are calling out.
+          Do you risk the isolation protocol?
+        </p>
+      </div>
+
+      <div id="step-transcend" class="story-step" data-scene="transcend">
+        <span class="step-tag">04 // Horizon</span>
+        <h2 class="step-title font-display">Connection</h2>
+        <p class="step-text">
+          You bypass the firewall. The data floods your neural link. You see them, not in the past, but now.
+          They aren't lost. They've evolved. They are the signal. And they've been waiting for you to listen.
+        </p>
+      </div>
+    </div>
+
+    <!-- Right: Sticky Visuals -->
+    <div class="visual-col">
+      <div class="scene-container scene-intro" id="sceneDisplay">
+        <div class="visual-el el-1"></div>
+        <div class="visual-el el-2"></div>
+        <div class="visual-el el-3"></div>
+        <div class="glitch-overlay"></div>
+        <div class="central-graphic"></div>
+      </div>
+    </div>
+   
+  </div>
+
+  <!-- Footer -->
+  <section class="footer-section">
+    <span class="step-tag">End of Transmission</span>
+    <h2 class="step-title font-display" style="font-size: 2rem;">To Be Continued...</h2>
+   
+    <button class="btn-restart" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+      Restart Signal
+    </button>
+  </section>
+
+  <!-- Scroll Indicator -->
+  <div class="scroll-indicator" id="scrollIndicator">
+    <span>Scroll to Decode</span>
+    <div class="scroll-arrow">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 5v14M5 12l7 7 7-7"/>
+      </svg>
+    </div>
+  </div>
+
+  <script>
+    // --- CURSOR LOGIC ---
+    const cursor = document.getElementById('cursor');
+    const cursorDot = document.getElementById('cursorDot');
+    let cursorX = 0, cursorY = 0, dotX = 0, dotY = 0;
+
+    document.addEventListener('mousemove', e => {
+      cursorX = e.clientX;
+      cursorY = e.clientY;
+    });
+
+    function animateCursor() {
+      dotX += (cursorX - dotX) * 0.15;
+      dotY += (cursorY - dotY) * 0.15;
+      cursor.style.left = (cursorX - 10) + 'px';
+      cursor.style.top = (cursorY - 10) + 'px';
+      cursorDot.style.left = (dotX - 3) + 'px';
+      cursorDot.style.top = (dotY - 3) + 'px';
+      requestAnimationFrame(animateCursor);
+    }
+    animateCursor();
+
+    // --- SPARK EFFECT ---
+    const canvas = document.getElementById('sparkCanvas');
+    const ctx = canvas.getContext('2d');
+    let sparks = [];
+    const colors = ['#00f5ff', '#ff00aa', '#ffee00'];
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    class Spark {
+      constructor(x, y) {
+        this.x = x; this.y = y;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 8 + 4;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.life = 1;
+        this.decay = Math.random() * 0.03 + 0.02;
+        this.color = colors[Math.floor(Math.random() * colors.length)];
+        this.size = Math.random() * 4 + 2;
+      }
+      update() {
+        this.x += this.vx; this.y += this.vy;
+        this.vy += 0.15;
+        this.vx *= 0.98; this.vy *= 0.98;
+        this.life -= this.decay;
+      }
+      draw() {
+        if (this.life <= 0) return;
+        ctx.save();
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, Math.max(0.1, this.size * this.life), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function createSparks(x, y, count = 35) {
+      for (let i = 0; i < count; i++) sparks.push(new Spark(x, y));
+    }
+
+    function animateSparks() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      sparks = sparks.filter(s => s.life > 0);
+      sparks.forEach(s => { s.update(); s.draw(); });
+      requestAnimationFrame(animateSparks);
+    }
+    animateSparks();
+
+    document.addEventListener('click', e => createSparks(e.clientX, e.clientY, 40));
+
+    // --- SCROLL PROGRESS & INDICATOR ---
+    const progressBar = document.getElementById('progressBar');
+    const scrollIndicator = document.getElementById('scrollIndicator');
+
+    window.addEventListener('scroll', () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const scrollPercent = (scrollTop / docHeight) * 100;
+      progressBar.style.width = scrollPercent + '%';
+
+      if (scrollTop > 100) {
+        scrollIndicator.classList.add('hidden');
+      } else {
+        scrollIndicator.classList.remove('hidden');
+      }
+    });
+
+    // --- SCROLLYTELLING LOGIC ---
+    const steps = document.querySelectorAll('.story-step');
+    const sceneDisplay = document.getElementById('sceneDisplay');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+          // Activate text
+          steps.forEach(step => step.classList.remove('active'));
+          entry.target.classList.add('active');
+         
+          // Update scene
+          const sceneName = entry.target.getAttribute('data-scene');
+          sceneDisplay.className = 'scene-container scene-' + sceneName;
+        }
+      });
+    }, {
+      threshold: 0.5,
+      rootMargin: "-100px 0px -100px 0px"
+    });
+
+    steps.forEach(step => observer.observe(step));
+
+    // Initial check
+    if(steps.length > 0) steps[0].classList.add('active');
+  </script>
+</body>
+</html>

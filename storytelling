@@ -1,0 +1,73 @@
+  .scrolly-container { position: relative; display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; }
+        @media (max-width: 768px) { .scrolly-container { grid-template-columns: 1fr; } }
+        #scrollyCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+        .text-col { padding: clamp(1.5rem, 5vw, 4rem); display: flex; flex-direction: column; justify-content: center; position: relative; z-index: 2; }
+        @media (max-width: 768px) { .text-col { order: 2; padding: 1.5rem; } }
+        .image-col { position: sticky; top: 0; height: 100vh; display: flex; align-items: center; justify-content: center; z-index: 2; padding: 2rem; }
+        @media (max-width: 768px) { .image-col { position: relative; height: 55vw; min-height: 240px; max-height: 380px; order: 1; padding: 1rem; } }
+
+        .story-step { min-height: 90vh; opacity: 0; transform: translateY(30px); transition: opacity 0.6s ease, transform 0.6s ease; border-left: 2px solid transparent; padding-left: 2rem; margin-left: -2rem; display: flex; flex-direction: column; justify-content: center; }
+        @media (max-width: 768px) { .story-step { min-height: 60vh; } }
+        .story-step.active { opacity: 1; transform: translateY(0); border-left-color: var(--accent-cyan); }
+
+        .step-tag { display: inline-block; font-size: 0.7rem; letter-spacing: 3px; text-transform: uppercase; color: var(--accent-magenta); margin-bottom: 1rem; font-weight: 600; }
+        .step-title { font-size: clamp(1.6rem, 4vw, 3rem); font-weight: 800; line-height: 1.1; margin-bottom: 1.5rem; background: linear-gradient(135deg, var(--fg) 0%, var(--accent-cyan) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .step-text { font-size: clamp(0.9rem, 2vw, 1.1rem); line-height: 1.8; color: var(--muted); max-width: 450px; margin-bottom: 1.5rem; }
+
+        .hud-label { position: absolute; font-family: monospace; font-size: clamp(0.45rem, 1vw, 0.6rem); letter-spacing: 2px; text-transform: uppercase; pointer-events: none; z-index: 3; line-height: 1.8; }
+        .hud-tl { top: 1rem; left: 1rem; color: rgba(0,245,255,0.45); }
+        .hud-bc { bottom: 1rem; left: 50%; transform: translateX(-50%); color: rgba(255,238,0,0.45); white-space: nowrap; }
+        @media (max-width: 480px) { .hud-tl { display: none; } .hud-bc { font-size: 0.42rem; } }
+
+        .scrolly-scanline { position: absolute; inset: 0; pointer-events: none; z-index: 1; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,245,255,0.012) 2px, rgba(0,245,255,0.012) 4px); }
+
+        .scene-image-frame { width: 100%; max-width: 400px; aspect-ratio: 3/4; position: relative; overflow: hidden; border-radius: 1.5rem; border: 1px solid rgba(0,245,255,0.2); box-shadow: 0 0 50px rgba(0,245,255,0.07), 0 0 120px rgba(0,245,255,0.03); transition: border-color 0.8s ease, box-shadow 0.8s ease; }
+        @media (max-width: 768px) { .scene-image-frame { max-width: 100%; aspect-ratio: 16/9; border-radius: 1rem; } }
+        .scene-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transform: scale(1.06); transition: opacity 0.85s ease, transform 0.85s ease; }
+        .scene-img.active { opacity: 1; transform: scale(1); }
+        .img-overlay { position: absolute; inset: 0; z-index: 1; background: linear-gradient(to top, rgba(5,5,10,0.7) 0%, rgba(5,5,10,0.08) 50%, rgba(5,5,10,0.25) 100%); }
+        .scene-caption { position: absolute; bottom: 1rem; left: 1rem; right: 1rem; z-index: 2; font-family: monospace; font-size: clamp(0.42rem, 0.9vw, 0.55rem); letter-spacing: 2px; text-transform: uppercase; color: rgba(0,245,255,0.7); transition: color 0.8s ease; }
+        .fc { position: absolute; width: 20px; height: 20px; z-index: 3; pointer-events: none; }
+        .fc::before, .fc::after { content:''; position:absolute; background:rgba(0,245,255,0.55); }
+        .fc-tl { top:.7rem; left:.7rem; } .fc-tl::before{top:0;left:0;width:100%;height:1px;} .fc-tl::after{top:0;left:0;width:1px;height:100%;}
+        .fc-tr { top:.7rem; right:.7rem; } .fc-tr::before{top:0;right:0;width:100%;height:1px;} .fc-tr::after{top:0;right:0;width:1px;height:100%;}
+        .fc-bl { bottom:.7rem; left:.7rem; } .fc-bl::before{bottom:0;left:0;width:100%;height:1px;} .fc-bl::after{bottom:0;left:0;width:1px;height:100%;}
+        .fc-br { bottom:.7rem; right:.7rem; } .fc-br::before{bottom:0;right:0;width:100%;height:1px;} .fc-br::after{bottom:0;right:0;width:1px;height:100%;}
+     
+   <!-- SCROLLYTELLING -->
+    <div class="pop-up-section scrolly-container">
+        <div class="text-col">
+            <div id="step-intro" class="story-step" data-scene="intro">
+                <span class="step-tag">01 // The Void</span>
+                <h2 class="step-title">Silence</h2>
+                <p class="step-text">Deep in sector 7G, the silence isn't empty. It's heavy. It presses against the hull of your station like a physical weight. You've been monitoring the frequencies for three cycles.</p>
+            </div>
+            <div id="step-discovery" class="story-step" data-scene="discovery">
+                <span class="step-tag">02 // The Anomaly</span>
+                <h2 class="step-title">Detection</h2>
+                <p class="step-text">A spike on the spectral analyzer. It's not background radiation. It's structured. Pulsing. A rhythm that feels too deliberate to be natural. It's coming from the coordinates of the vanished colony.</p>
+            </div>
+            <div id="step-conflict" class="story-step" data-scene="conflict">
+                <span class="step-tag">03 // The Choice</span>
+                <h2 class="step-title">Decryption</h2>
+                <p class="step-text">The AI warns of a viral payload embedded in the transmission. Opening it could compromise the entire station. But the signal contains images. Faces. The missing colonists are calling out. Do you risk the isolation protocol?</p>
+            </div>
+            <div id="step-transcend" class="story-step" data-scene="transcend">
+                <span class="step-tag">04 // Horizon</span>
+                <h2 class="step-title">Connection</h2>
+                <p class="step-text">You bypass the firewall. The data floods your neural link. You see them, not in the past, but now. They aren't lost. They've evolved. They are the signal. And they've been waiting for you to listen.</p>
+            </div>
+        </div>
+
+        <div class="visual-col">
+            <div class="corner c-tl"></div>
+            <div class="corner c-tr"></div>
+            <div class="corner c-bl"></div>
+            <div class="corner c-br"></div>
+            <div class="scanline"></div>
+            <div class="hud-label hud-tl" id="hudTL">SYS: IDLE<br>FREQ: --<br>STATUS: INIT</div>
+            <div class="hud-label hud-br" id="hudBR">ROT: 0°<br>PHASE: VOID</div>
+            <div class="hud-label hud-bc" id="hudBC">// SECTOR 7G — SILENCE //</div>
+            <canvas id="scrollyCanvas"></canvas>
+        </div>
+    </div>
